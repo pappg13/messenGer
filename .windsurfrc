@@ -1,0 +1,15 @@
+{
+  "version": "1.0.0",
+  "environment": {
+    "type": "node",
+    "version": "latest"
+  },
+  "dependencies": {
+    "node": "latest",
+    "npm": "latest"
+  },
+  "scripts": {
+    "install": "npm install",
+    "start": "npm start"
+  }
+}

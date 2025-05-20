@@ -1,6 +1,34 @@
 {
-  "name": "VibeCoding",
+  "name": "vibecoding",
+  "version": "1.0.0",
   "lockfileVersion": 3,
   "requires": true,
-  "packages": {}
+  "packages": {},
+  "scripts": {
+    "start": "live-server",
+    "build": "mkdir -p docs && cp index.html manifest.json script.js docs/",
+    "deploy": "gh-pages -d docs"
+  },
+  "dependencies": {
+    "live-server": "^1.2.0"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0"
+  },
+  "description": "voice messaging app",
+  "main": "script.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pappg13/messenGer.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/pappg13/messenGer/issues"
+  },
+  "homepage": "https://github.com/pappg13/messenGer#readme"
 }
