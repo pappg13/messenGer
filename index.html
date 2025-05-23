@@ -4,6 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Voice Messenger</title>
+  
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-storage-compat.js"></script>
+
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -71,9 +78,33 @@
 </head>
 <body>
   <h1>🎤 messen - G - er</h1>
-  <button id="record">Start Recoording</button>
+  <button id="record">Start Recording</button>
   <button id="stop" disabled>Stop</button>
   <ul id="recordingsList"></ul>
-  <script src="script.js"></script>
+
+  <!-- Firebase Config -->
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBTbEOe4-u6E7mVuCL3HYVBhd_otrdCKhM",
+      authDomain: "messen-g-er2.firebaseapp.com",
+      projectId: "messen-g-er2",
+      storageBucket: "messen-g-er2.firebasestorage.app",
+      messagingSenderId: "905406830029",
+      appId: "1:905406830029:web:7e565466436ffd6fffa084",
+      databaseURL: "https://messen-g-er2-default-rtdb.europe-west1.firebasedatabase.app/"
+};
+    firebase.initializeApp(firebaseConfig);
+
+    // Debug logs
+    console.log('Firebase initialized:', firebase.apps.length > 0);
+    console.log('Database:', firebase.database() !== undefined);
+    console.log('Database ref:', firebase.database().ref() !== undefined);
+
+    // Test database connection
+    firebase.database().ref('.info/connected').on('value', (snapshot) => {
+    console.log('Database connected:', snapshot.val());
+  });
+  </script>
+  <script src="script.js" defer></script>
 </body>
 </html>

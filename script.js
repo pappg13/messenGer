@@ -1,3 +1,83 @@
+// Wait for Firebase to be ready
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('DOM loaded, initializing Firebase...');
+  
+  // Wait a moment for Firebase to initialize
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  
+  console.log('Firebase apps:', firebase.apps);
+  console.log('Database:', firebase.database());
+  console.log('Database ref:', firebase.database().ref());
+  
+  // Now initialize your database references
+  window.database = firebase.database();
+  window.messagesRef = database.ref('messages');
+  
+  console.log('Loading messages...');
+  loadMessages();
+  
+  // Rest of your initialization code
+  initializeRecording();
+  // Test database write
+  console.log('Testing database write...');
+  const testRef = database.ref('test');
+  testRef.set({ test: 'Hello Firebase' })
+    .then(() => {
+      console.log('Write test successful');
+      return testRef.once('value');
+    })
+    .then(snapshot => {
+    console.log('Read test:', snapshot.val());
+    return testRef.remove(); // Clean up test data
+  })
+  .then(() => console.log('Test data cleaned up'))
+  .catch(error => console.error('Database test failed:', error));
+});
+
+function initializeRecording() {
+  window.mediaRecorder = null;
+  window.audioChunks = [];
+  
+}
+
+
+const storage = firebase.storage();
+const storageRef = storage.ref();
+
+async function saveMessage(blob, location) {
+  console.log('Uploading audio to storage...');
+  
+  // Create a unique filename
+  const filename = `audio/${Date.now()}.webm`;
+  const audioRef = storageRef.child(filename);
+  
+  try {
+    // Upload the blob to Firebase Storage
+    const snapshot = await audioRef.put(blob);
+    console.log('Uploaded audio file');
+    
+    // Get the download URL
+    const downloadURL = await snapshot.ref.getDownloadURL();
+    console.log('Got download URL:', downloadURL);
+    
+    // Create message with the download URL
+    const message = {
+      audioUrl: downloadURL,
+      location: location,
+      timestamp: firebase.database.ServerValue.TIMESTAMP
+    };
+    
+    // Save message to database
+    const newMessageRef = messagesRef.push();
+    await newMessageRef.set(message);
+    console.log('Message saved to database');
+    
+    return newMessageRef;
+  } catch (error) {
+    console.error('Error in saveMessage:', error);
+    throw error;
+  }
+}
 let mediaRecorder;
 let audioChunks = [];
 let syncedMessages = [];
@@ -6,10 +86,67 @@ const recordBtn = document.getElementById("record");
 const stopBtn = document.getElementById("stop");
 const recordingsList = document.getElementById("recordingsList"); 
 
+// Reference to the database
+const database = firebase.database();
+const messagesRef = database.ref('messages');
+
+// Function to save a message
+function saveMessage(audioUrl, location) {
+  console.log('Creating message object...');
+  const message = {
+    audioUrl: audioUrl,
+    location: location,
+    timestamp: firebase.database.ServerValue.TIMESTAMP
+  };
+  
+  console.log('Pushing message to Firebase...', message);
+  const newMessageRef = messagesRef.push();
+  
+  return newMessageRef.set(message)
+    .then(() => {
+      console.log('Message saved successfully with key:', newMessageRef.key);
+      return newMessageRef;
+    })
+    .catch(error => {
+      console.error('Error in saveMessage:', {
+        code: error.code,
+        message: error.message,
+        details: error.details
+      });
+      throw error;
+    });
+}
+
+// Function to load messages
+function loadMessages() {
+  console.log('Setting up messages listener...');
+  messagesRef.on('value', (snapshot) => {
+    console.log('Messages updated:', snapshot.val());
+    const messages = [];
+    snapshot.forEach((childSnapshot) => {
+      messages.push({
+        id: childSnapshot.key,
+        ...childSnapshot.val()
+      });
+    });
+    updateUI(messages);
+  }, (error) => {
+    console.error('Error loading messages:', error);
+  });
+}
+
+// Call loadMessages when the page loads
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('DOM loaded, loading messages...');
+  loadMessages();
+});
+
+
 let recordingIndicator = document.createElement('div');
 recordingIndicator.className = 'recording-indicator';
 recordingIndicator.style.display = 'none';
-recordBtn.parentNode.insertBefore(recordingIndicator, recordBtn);
+document.body.appendChild(recordingIndicator);
+
 
 async function getCityFromCoordinates(lat, lon) {
   try {
@@ -23,38 +160,63 @@ async function getCityFromCoordinates(lat, lon) {
 }
 
 recordBtn.onclick = async () => {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  mediaRecorder = new MediaRecorder(stream);
-  audioChunks = [];
+  try {
+    audioChunks = [];  // Clear previous chunks
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
 
-  mediaRecorder.start();
-  recordingIndicator.style.display = 'inline-block';
+    // Set up mediaRecorder event handlers
+    mediaRecorder.ondataavailable = e => {
+      audioChunks.push(e.data);
+    };
 
-  mediaRecorder.ondataavailable = e => {
-    audioChunks.push(e.data);
-  };
+    mediaRecorder.onstop = async () => {
+      console.log('MediaRecorder stopped, processing recording...');
+      try {
+        if (audioChunks.length === 0) {
+          throw new Error('No audio data recorded');
+        }
+        
+        console.log('Creating audio blob...');
+        const blob = new Blob(audioChunks, { type: 'audio/webm' });
+        
+        // Get user's location
+        console.log('Getting user location...');
+        const location = await getUserLocation();
+        console.log('Location:', location);
 
-  mediaRecorder.onstop = async () => {
-    const blob = new Blob(audioChunks, { type: 'audio/webm' });
-    const url = URL.createObjectURL(blob);
+        // Save the message with the blob
+        console.log('Saving message to Firebase...');
+        const messageRef = await saveMessage(blob, location);
+        console.log('Message saved with key:', messageRef.key);
+        
+        // Clear the chunks for the next recording
+        audioChunks = [];
+        console.log('Audio chunks cleared');
+        
+      } catch (error) {
+        console.error('Error in mediaRecorder.onstop:', error);
+        if (error.code) {
+          console.error('Firebase error:', {
+            code: error.code,
+            message: error.message,
+            details: error.details
+          });
+        }
+      }
+    };
+
+    // Start recording
+    mediaRecorder.start();
+    recordingIndicator.style.display = 'inline-block';
+    recordBtn.disabled = true;
+    stopBtn.disabled = false;
+
+  } catch (error) {
+    console.error('Error starting recording:', error);
+  }
+};
     
-    // Get user's location
-    const location = await getUserLocation();
-    
-    // Create a container div for better styling
-    const container = document.createElement('div');
-    container.className = 'recording-item';
-    
-    // Create timestamp
-    const timestamp = new Date().toLocaleTimeString();
-    const timeSpan = document.createElement('span');
-    timeSpan.className = 'timestamp';
-    timeSpan.textContent = `Recorded at: ${timestamp} | Location: ${location}`;
-    
-    // Create audio element
-    const audio = document.createElement('audio');
-    audio.controls = true;
-    audio.src = url;
     
     // Create delete button
     const deleteBtn = document.createElement('button');
@@ -82,28 +244,15 @@ recordBtn.onclick = async () => {
       }
     };
     
-    // Add elements to container
-    container.appendChild(timeSpan);
-    container.appendChild(audio);
-    container.appendChild(deleteBtn);
-    
-    // Create list item and add container
-    const li = document.createElement('li');
-    li.appendChild(container);
-    recordingsList.insertBefore(li, recordingsList.firstChild);
-  };
-
-  recordBtn.disabled = true;
-  stopBtn.disabled = false;
-};
 
 stopBtn.onclick = () => {
-  mediaRecorder.stop();
-  recordBtn.disabled = false;
-  stopBtn.disabled = true;
-  recordingIndicator.style.display = 'none';
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+    recordBtn.disabled = false;
+    stopBtn.disabled = true;
+    recordingIndicator.style.display = 'none';
+  }
 };
-
 async function getUserLocation() {
   try {
     const position = await new Promise((resolve, reject) => {
@@ -118,3 +267,46 @@ async function getUserLocation() {
     return 'Unknown location';
   }
 }
+
+function updateUI(messages) {
+  const recordingsList = document.getElementById('recordingsList');
+  recordingsList.innerHTML = ''; // Clear existing messages
+
+  messages.forEach(message => {
+    const li = document.createElement('li');
+    li.className = 'recording-item';
+    li.innerHTML = `
+      <span class="timestamp">
+        ${new Date(message.timestamp).toLocaleString()} | 
+        Location: ${message.location}
+      </span>
+      <audio controls src="${message.audioUrl}"></audio>
+      <button class="delete-btn" data-id="${message.id}">×</button>
+    `;
+    recordingsList.appendChild(li);
+  });
+}
+
+// Delete functionality
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('delete-btn')) {
+    const messageId = e.target.dataset.id;
+    database.ref(`messages/${messageId}`).remove()
+      .then(() => {
+        console.log('Message deleted');
+      })
+      .catch((error) => {
+        console.error('Error deleting message:', error);
+      });
+  }
+});
+
+// Stop button handler
+stopBtn.onclick = () => {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+    recordBtn.disabled = false;
+    stopBtn.disabled = true;
+    recordingIndicator.style.display = 'none';
+  }
+};

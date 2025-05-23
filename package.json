@@ -10,6 +10,7 @@
     "deploy": "gh-pages -d docs"
   },
   "dependencies": {
+    "firebase": "^9.15.0",
     "live-server": "^1.2.0"
   },
   "devDependencies": {
