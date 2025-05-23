@@ -90,31 +90,45 @@ const recordingsList = document.getElementById("recordingsList");
 const database = firebase.database();
 const messagesRef = database.ref('messages');
 
-// Function to save a message
-function saveMessage(audioUrl, location) {
-  console.log('Creating message object...');
-  const message = {
-    audioUrl: audioUrl,
-    location: location,
-    timestamp: firebase.database.ServerValue.TIMESTAMP
-  };
+async function saveMessage(blob, location) {
+  console.log('Starting to save message...');
   
-  console.log('Pushing message to Firebase...', message);
-  const newMessageRef = messagesRef.push();
-  
-  return newMessageRef.set(message)
-    .then(() => {
-      console.log('Message saved successfully with key:', newMessageRef.key);
-      return newMessageRef;
-    })
-    .catch(error => {
-      console.error('Error in saveMessage:', {
-        code: error.code,
-        message: error.message,
-        details: error.details
-      });
-      throw error;
+  try {
+    // 1. Generate a unique filename
+    const filename = `recordings/${Date.now()}.webm`;
+    
+    // 2. Upload the blob to Firebase Storage
+    console.log('Uploading audio to storage...');
+    const storageRef = firebase.storage().ref();
+    const audioRef = storageRef.child(filename);
+    await audioRef.put(blob);
+    
+    // 3. Get the download URL
+    console.log('Getting download URL...');
+    const audioUrl = await audioRef.getDownloadURL();
+    
+    // 4. Save message data to Realtime Database
+    console.log('Saving message to database...');
+    const message = {
+      audioUrl: audioUrl,
+      location: location,
+      timestamp: firebase.database.ServerValue.TIMESTAMP
+    };
+    
+    const newMessageRef = messagesRef.push();
+    await newMessageRef.set(message);
+    
+    console.log('Message saved successfully with key:', newMessageRef.key);
+    return newMessageRef;
+    
+  } catch (error) {
+    console.error('Error in saveMessage:', {
+      code: error.code,
+      message: error.message,
+      details: error.details
     });
+    throw error;
+  }
 }
 
 // Function to load messages
