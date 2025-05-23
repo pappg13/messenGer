@@ -294,7 +294,7 @@ function updateUI(messages) {
         ${new Date(message.timestamp).toLocaleString()} | 
         Location: ${message.location}
       </span>
-      <audio controls src="${message.audioUrl}"></audio>
+      <audio controls crossorigin="anonymous" src="${message.audioUrl}"></audio>
       <button class="delete-btn" data-id="${message.id}">×</button>
     `;
     recordingsList.appendChild(li);
