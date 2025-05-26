@@ -1,6 +1,6 @@
 [
     {
-      "origin": ["*"],
+      "origin": ["http://127.0.0.1:5501", "https://pappg13.github.io"],
       "method": ["GET", "HEAD", "POST", "PUT", "DELETE"],
       "responseHeader": ["Content-Type", "Authorization"],
       "maxAgeSeconds": 3600
