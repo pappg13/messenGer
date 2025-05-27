@@ -131,11 +131,49 @@ async function saveMessage(blob, location) {
   }
 }
 
+// Add this function to handle file uploads
+async function uploadAudioFile(file) {
+  try {
+    const storageRef = firebase.storage().ref();
+    const fileRef = storageRef.child(`audio/${file.name}`);
+    const uploadTask = fileRef.put(file, {
+      contentType: file.type || 'audio/webm'
+    });
+
+    // Return a promise that resolves when upload is complete
+    return new Promise((resolve, reject) => {
+      uploadTask.on('state_changed',
+        (snapshot) => {
+          // Handle progress if needed
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          console.log(`Upload is ${progress}% done`);
+        },
+        (error) => {
+          console.error('Upload failed:', error);
+          reject(error);
+        },
+        async () => {
+          const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+          console.log('File available at', downloadURL);
+          resolve(downloadURL);
+        }
+      );
+    });
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    throw error;
+  }
+}
+
+// You can call this function when you have a file to upload, for example:
+// const file = /* your file from file input */;
+// const downloadURL = await uploadAudioFile(file);
+
 // Function to load messages
 function loadMessages() {
-  console.log('Setting up messages listener...');
+  console.log("Setting up messages listener..." );
   messagesRef.on('value', (snapshot) => {
-    console.log('Messages updated:', snapshot.val());
+    console.log("Messages updated:", snapshot.val());
     const messages = [];
     snapshot.forEach((childSnapshot) => {
       messages.push({
@@ -145,13 +183,13 @@ function loadMessages() {
     });
     updateUI(messages);
   }, (error) => {
-    console.error('Error loading messages:', error);
+    console.error("Error loading messages:", error);
   });
 }
 
 // Call loadMessages when the page loads
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('DOM loaded, loading messages...');
+  console.log("DOM loaded, loading messages...");
   loadMessages();
 });
 
@@ -168,7 +206,7 @@ async function getCityFromCoordinates(lat, lon) {
     const data = await response.json();
     return data.address.city || data.address.town || 'Unknown location';
   } catch (error) {
-    console.error('Error getting city:', error);
+    console.error("Error getting city:", error);
     return 'Unknown location';
   }
 }
@@ -185,17 +223,17 @@ recordBtn.onclick = async () => {
     };
 
     mediaRecorder.onstop = async () => {
-      console.log('MediaRecorder stopped, processing recording...');
+      console.log("MediaRecorder stopped, processing recording...");
       try {
         if (audioChunks.length === 0) {
-          throw new Error('No audio data recorded');
+          throw new Error("No audio data recorded");
         }
         
-        console.log('Creating audio blob...');
+        console.log("Creating audio blob...");
         const blob = new Blob(audioChunks, { type: 'audio/webm' });
         
         // Get user's location
-        console.log('Getting user location...');
+        console.log("Getting user location...");
         const location = await getUserLocation();
         console.log('Location:', location);
 
