@@ -45,39 +45,85 @@ const storage = firebase.storage();
 const storageRef = storage.ref();
 
 async function saveMessage(blob, location) {
-  console.log('Uploading audio to storage...');
-  
-  // Create a unique filename
-  const filename = `audio/${Date.now()}.webm`;
-  const audioRef = storageRef.child(filename);
+  console.log('Starting to save message...');
   
   try {
-    // Upload the blob to Firebase Storage
-    const snapshot = await audioRef.put(blob);
-    console.log('Uploaded audio file');
+    // 1. Generate a unique filename with .webm extension
+    const timestamp = Date.now();
+    const filename = `recordings/${timestamp}.webm`;
+
+    // 2. Create a reference to the file
+    const fileRef = storageRef.child(filename);
     
-    // Get the download URL
+    console.log('Uploading WebM file to:', filename);
+    
+    // 3. Upload the blob to Firebase Storage with explicit content type
+    const uploadTask = fileRef.put(blob, {
+      contentType: 'audio/webm;codecs=opus',
+      customMetadata: {
+        'uploadedAt': new Date().toISOString(),
+        'processed': 'false'
+      }
+    });
+    
+    // 4. Wait for the upload to complete and get the download URL
+    const snapshot = await uploadTask;
+    console.log('Upload completed:', snapshot);
+ 
+    
+    // 5.1 Wait for the URL
+    async function waitForMp3(filePath, maxAttempts = 10, delayMs = 1000) {
+      const mp3Ref = storage.ref(filePath.replace('.webm', '.mp3'));
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          const url = await mp3Ref.getDownloadURL();
+          return url; // 🎯 MP3 is ready
+        } catch (err) {
+          console.log(`MP3 not ready (attempt ${attempt + 1}), retrying...`);
+          await new Promise(res => setTimeout(res, delayMs));
+        }
+      }
+      throw new Error('MP3 file not available after polling');
+    }
+
+
+    // 5.2 Get the download URL
     const downloadURL = await snapshot.ref.getDownloadURL();
-    console.log('Got download URL:', downloadURL);
+    const mp3Url = await waitForMp3(filename);
+    console.log('File available at:', downloadURL);
+    console.log('Full storage path:', snapshot.ref.fullPath);
+    console.log('Bucket:', snapshot.ref.bucket);
+    console.log('Download URL:', downloadURL);
     
-    // Create message with the download URL
+    // 6. Save message data to Realtime Database
+    console.log('Saving message to database...');
     const message = {
-      audioUrl: downloadURL,
+      audioUrl: mp3Url,
       location: location,
-      timestamp: firebase.database.ServerValue.TIMESTAMP
+      timestamp: firebase.database.ServerValue.TIMESTAMP,
+      status: 'converted',
+      format: 'mp3',
+      filename: filename.replace('.webm', '.mp3') // optional
     };
     
-    // Save message to database
     const newMessageRef = messagesRef.push();
     await newMessageRef.set(message);
-    console.log('Message saved to database');
-    
+  
+    console.log('Message saved with ID:', newMessageRef.key);
     return newMessageRef;
+    
   } catch (error) {
-    console.error('Error in saveMessage:', error);
+    console.error('Error in saveMessage:', {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      serverResponse: error.serverResponse,
+      stack: error.stack
+    });
     throw error;
   }
 }
+
 let mediaRecorder;
 let audioChunks = [];
 let syncedMessages = [];
@@ -90,48 +136,6 @@ const recordingsList = document.getElementById("recordingsList");
 const database = firebase.database();
 const messagesRef = database.ref('messages');
 
-async function saveMessage(blob, location) {
-  console.log('Starting to save message...');
-  
-  try {
-    // 1. Generate a unique filename
-    const filename = `recordings/${Date.now()}.webm`;
-    
-    // 2. Upload the blob to Firebase Storage
-    console.log('Uploading audio to storage...');
-    const storageRef = firebase.storage().ref();
-    const audioRef = storageRef.child(filename);
-    await audioRef.put(blob);
-    
-    // 3. Get the download URL
-    console.log('Getting download URL...');
-    const audioUrl = await audioRef.getDownloadURL();
-    
-    // 4. Save message data to Realtime Database
-    console.log('Saving message to database...');
-    const message = {
-      audioUrl: audioUrl,
-      location: location,
-      timestamp: firebase.database.ServerValue.TIMESTAMP
-    };
-    
-    const newMessageRef = messagesRef.push();
-    await newMessageRef.set(message);
-    
-    console.log('Message saved successfully with key:', newMessageRef.key);
-    return newMessageRef;
-    
-  } catch (error) {
-    console.error('Error in saveMessage:', {
-      code: error.code,
-      message: error.message,
-      details: error.details
-    });
-    throw error;
-  }
-}
-
-// Add this function to handle file uploads
 async function uploadAudioFile(file) {
   try {
     const storageRef = firebase.storage().ref();
