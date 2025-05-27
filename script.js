@@ -54,7 +54,6 @@ async function saveMessage(blob, location) {
 
     // 2. Create a reference to the file
     const fileRef = storageRef.child(filename);
-    
     console.log('Uploading WebM file to:', filename);
     
     // 3. Upload the blob to Firebase Storage with explicit content type
@@ -126,7 +125,7 @@ async function saveMessage(blob, location) {
 
 let mediaRecorder;
 let audioChunks = [];
-let syncedMessages = [];
+let isRecording = false; 
 
 const recordBtn = document.getElementById("record");
 const stopBtn = document.getElementById("stop");
@@ -217,62 +216,42 @@ async function getCityFromCoordinates(lat, lon) {
 
 recordBtn.onclick = async () => {
   try {
-    audioChunks = [];  // Clear previous chunks
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
+    console.log('Starting recording...');
+    audioChunks = [];
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true
+      } 
+    });
 
-    // Set up mediaRecorder event handlers
-    mediaRecorder.ondataavailable = e => {
-      audioChunks.push(e.data);
-    };
-
-    mediaRecorder.onstop = async () => {
-      console.log("MediaRecorder stopped, processing recording...");
-      try {
-        if (audioChunks.length === 0) {
-          throw new Error("No audio data recorded");
-        }
-        
-        console.log("Creating audio blob...");
-        const blob = new Blob(audioChunks, { type: 'audio/webm' });
-        
-        // Get user's location
-        console.log("Getting user location...");
-        const location = await getUserLocation();
-        console.log('Location:', location);
-
-        // Save the message with the blob
-        console.log('Saving message to Firebase...');
-        const messageRef = await saveMessage(blob, location);
-        console.log('Message saved with key:', messageRef.key);
-        
-        // Clear the chunks for the next recording
-        audioChunks = [];
-        console.log('Audio chunks cleared');
-        
-      } catch (error) {
-        console.error('Error in mediaRecorder.onstop:', error);
-        if (error.code) {
-          console.error('Firebase error:', {
-            code: error.code,
-            message: error.message,
-            details: error.details
-          });
-        }
+    mediaRecorder = new MediaRecorder(stream, {
+      mimeType: 'audio/webm;codecs=opus'
+    });
+    
+    // Set up data handler
+    mediaRecorder.ondataavailable = (e) => {
+      console.log('Data available:', e.data.size, 'bytes');
+      if (e.data.size > 0) {
+        audioChunks.push(e.data);
       }
     };
-
-    // Start recording
-    mediaRecorder.start();
-    recordingIndicator.style.display = 'inline-block';
+    
+    mediaRecorder.onstop = () => {
+      console.log('Recording stopped, chunks:', audioChunks.length);
+    };
+    // Start recording without timeslice to get one blob at the end
+    mediaRecorder.start(100);
+    isRecording = true;
     recordBtn.disabled = true;
     stopBtn.disabled = false;
-
+    console.log('Recording started...');
+    
   } catch (error) {
     console.error('Error starting recording:', error);
+    alert('Error accessing microphone. Please ensure you have granted microphone permissions.');
   }
-};
-    
+}; 
     
     // Create delete button
     const deleteBtn = document.createElement('button');
@@ -301,14 +280,60 @@ recordBtn.onclick = async () => {
     };
     
 
-stopBtn.onclick = () => {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+// Stop button click handler
+stopBtn.onclick = async () => {
+  if (!mediaRecorder || !isRecording) return;
+  
+  console.log('Stopping recording...');
+  isRecording = false;
+  stopBtn.disabled = true;
+  
+  try {
+    // Stop the MediaRecorder
     mediaRecorder.stop();
+    
+    // Stop all tracks in the stream
+    mediaRecorder.stream.getTracks().forEach(track => {
+      track.stop();
+      console.log('Stopped track:', track.kind);
+    });
+    
+    // Wait for the final data to be available
+    await new Promise(resolve => {
+      mediaRecorder.onstop = resolve;
+      // Set a timeout in case onstop doesn't fire
+      setTimeout(resolve, 1000);
+    });
+    
+    console.log('Creating blob from', audioChunks.length, 'chunks');
+    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+    console.log('Blob created, size:', audioBlob.size, 'bytes');
+    
+    if (audioBlob.size === 0) {
+      throw new Error('Recorded audio is empty');
+    }
+    
+    // Get location and save
+    console.log('Getting location...');
+    const location = await getUserLocation();
+    console.log('Location:', location);
+    
+    console.log('Saving message...');
+    await saveMessage(audioBlob, location);
+    console.log('Message saved successfully');
+    
+    // Reset UI
     recordBtn.disabled = false;
-    stopBtn.disabled = true;
-    recordingIndicator.style.display = 'none';
+    audioChunks = [];
+    
+  } catch (error) {
+    console.error('Error stopping recording:', error);
+    alert('Error saving recording: ' + error.message);
+    recordBtn.disabled = false;
   }
 };
+
+
 async function getUserLocation() {
   try {
     const position = await new Promise((resolve, reject) => {
@@ -356,13 +381,3 @@ document.addEventListener('click', (e) => {
       });
   }
 });
-
-// Stop button handler
-stopBtn.onclick = () => {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop();
-    recordBtn.disabled = false;
-    stopBtn.disabled = true;
-    recordingIndicator.style.display = 'none';
-  }
-};
