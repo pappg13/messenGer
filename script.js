@@ -123,9 +123,13 @@ async function saveMessage(blob, location) {
   }
 }
 
-let mediaRecorder;
+let mediaStream = null;
+let audioContext = null;
+let mediaRecorder = null;
 let audioChunks = [];
-let isRecording = false; 
+let isRecording = false;
+let silenceDetected = false;
+let silenceTimer = null;
 
 const recordBtn = document.getElementById("record");
 const stopBtn = document.getElementById("stop");
@@ -218,16 +222,33 @@ recordBtn.onclick = async () => {
   try {
     console.log('Starting recording...');
     audioChunks = [];
-    const stream = await navigator.mediaDevices.getUserMedia({ 
+    silenceDetected = false;
+    
+    // Request audio permissions and get stream
+    mediaStream = await navigator.mediaDevices.getUserMedia({ 
       audio: {
         echoCancellation: true,
-        noiseSuppression: true
+        noiseSuppression: true,
+        autoGainControl: false
       } 
     });
 
-    mediaRecorder = new MediaRecorder(stream, {
-      mimeType: 'audio/webm;codecs=opus'
-    });
+    // Create audio context
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioContext.createMediaStreamSource(mediaStream);
+    
+    // Create MediaRecorder with MIME type that works on iOS
+    const options = { 
+      mimeType: 'audio/webm',
+      audioBitsPerSecond: 128000 
+    };
+    
+    // Fallback for Safari/iOS
+    if (MediaRecorder.isTypeSupported('audio/mp4')) {
+      options.mimeType = 'audio/mp4';
+    }
+    
+    mediaRecorder = new MediaRecorder(mediaStream, options);
     
     // Set up data handler
     mediaRecorder.ondataavailable = (e) => {
@@ -239,20 +260,45 @@ recordBtn.onclick = async () => {
     
     mediaRecorder.onstop = () => {
       console.log('Recording stopped, chunks:', audioChunks.length);
+      cleanupMediaStream();
     };
-    // Start recording without timeslice to get one blob at the end
-    mediaRecorder.start(100);
+    
+    // Start with a small timeslice for better iOS compatibility
+    mediaRecorder.start(1000); // 1 second timeslice
     isRecording = true;
     recordBtn.disabled = true;
     stopBtn.disabled = false;
+    
+    // Prevent iOS from suspending the audio context
+    const emptyNode = audioContext.createGain();
+    emptyNode.gain.value = 0;
+    emptyNode.connect(audioContext.destination);
+    
     console.log('Recording started...');
     
   } catch (error) {
     console.error('Error starting recording:', error);
-    alert('Error accessing microphone. Please ensure you have granted microphone permissions.');
+    alert('Error accessing microphone: ' + error.message);
+    cleanupMediaStream();
+    recordBtn.disabled = false;
   }
-}; 
-    
+};
+
+// Helper function to clean up media stream
+function cleanupMediaStream() {
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(track => {
+      track.stop();
+      console.log('Stopped track:', track.kind);
+    });
+    mediaStream = null;
+  }
+  if (audioContext && audioContext.state !== 'closed') {
+    audioContext.close().catch(console.error);
+    audioContext = null;
+  }
+}
+
     // Create delete button
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'delete-btn';
@@ -292,21 +338,19 @@ stopBtn.onclick = async () => {
     // Stop the MediaRecorder
     mediaRecorder.stop();
     
-    // Stop all tracks in the stream
-    mediaRecorder.stream.getTracks().forEach(track => {
-      track.stop();
-      console.log('Stopped track:', track.kind);
-    });
-    
     // Wait for the final data to be available
     await new Promise(resolve => {
-      mediaRecorder.onstop = resolve;
-      // Set a timeout in case onstop doesn't fire
-      setTimeout(resolve, 1000);
+      mediaRecorder.onstop = () => {
+        console.log('MediaRecorder stopped');
+        resolve();
+      };
+      setTimeout(resolve, 1000); // Safety timeout
     });
     
     console.log('Creating blob from', audioChunks.length, 'chunks');
-    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+    const audioBlob = new Blob(audioChunks, { 
+      type: mediaRecorder.mimeType 
+    });
     console.log('Blob created, size:', audioBlob.size, 'bytes');
     
     if (audioBlob.size === 0) {
@@ -330,6 +374,8 @@ stopBtn.onclick = async () => {
     console.error('Error stopping recording:', error);
     alert('Error saving recording: ' + error.message);
     recordBtn.disabled = false;
+  } finally {
+    cleanupMediaStream();
   }
 };
 
