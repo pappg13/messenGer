@@ -34,6 +34,7 @@
       padding: 0.5rem;
       border: 1px solid #ddd;
       border-radius: 4px;
+      box-sizing: border-box;
     }
     .btn {
       width: 100%;
@@ -44,15 +45,60 @@
       border-radius: 4px;
       cursor: pointer;
       font-size: 1rem;
+      margin-top: 1rem;
     }
     .btn:hover {
       background-color: #357abd;
     }
+    .error-message {
+      color: #d32f2f;
+      margin-top: 1rem;
+      text-align: center;
+      min-height: 20px;
+    }
+    .switch-form {
+      margin-top: 1rem;
+      text-align: center;
+    }
+    .switch-form a {
+      color: #4285f4;
+      text-decoration: none;
+    }
+    .switch-form a:hover {
+      text-decoration: underline;
+    }
   </style>
+  
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+  <script>
+    // Initialize Firebase with your config
+    const firebaseConfig = {
+      apiKey: "AIzaSyBTbEOe4-u6E7mVuCL3HYVBhd_otrdCKhM",
+      authDomain: "messen-g-er2.firebaseapp.com",
+      projectId: "messen-g-er2",
+      storageBucket: "messen-g-er2.firebasestorage.app",
+      messagingSenderId: "905406830029",
+      appId: "1:905406830029:web:7e565466436ffd6fffa084",
+      databaseURL: "https://messen-g-er2-default-rtdb.europe-west1.firebasedatabase.app/"
+    };
+    
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    
+    // Make auth available globally
+    const auth = firebase.auth();
+    
+    // Debug log
+    console.log('Firebase Auth initialized:', auth !== undefined);
+  </script>
 </head>
 <body>
   <div class="login-container">
-    <h1>VibeCoding</h1>
+    <h1>messen-G-er</h1>
+    
+    <!-- Login Form -->
     <div id="loginForm">
       <div class="form-group">
         <label for="email">Email</label>
@@ -62,24 +108,32 @@
         <label for="password">Password</label>
         <input type="password" id="password" required>
       </div>
-      <button class="btn" onclick="signIn()">Sign In</button>
-      <p>Don't have an account? <a href="#" onclick="showSignUpForm()">Sign Up</a></p>
+      <button class="btn" id="signInBtn">Sign In</button>
+      <div class="switch-form">
+        Don't have an account? <a href="#" id="showSignUp">Sign Up</a>
+      </div>
+      <div id="errorMessage" class="error-message"></div>
     </div>
+    
+    <!-- Sign Up Form (initially hidden) -->
     <div id="signUpForm" style="display: none;">
       <div class="form-group">
         <label for="signUpEmail">Email</label>
         <input type="email" id="signUpEmail" required>
       </div>
       <div class="form-group">
-        <label for="signUpPassword">Password</label>
-        <input type="password" id="signUpPassword" required>
+        <label for="signUpPassword">Password (min 6 characters)</label>
+        <input type="password" id="signUpPassword" minlength="6" required>
       </div>
-      <button class="btn" onclick="signUp()">Sign Up</button>
-      <p>Already have an account? <a href="#" onclick="showLoginForm()">Sign In</a></p>
+      <button class="btn" id="signUpBtn">Sign Up</button>
+      <div class="switch-form">
+        Already have an account? <a href="#" id="showLogin">Sign In</a>
+      </div>
+      <div id="signUpErrorMessage" class="error-message"></div>
     </div>
   </div>
-  <script src="https://www.gstatic.com/firebasejs/9.x.x/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.x.x/firebase-auth-compat.js"></script>
+
+  <!-- Application JavaScript -->
   <script src="auth.js"></script>
 </body>
 </html>
