@@ -403,16 +403,88 @@ function updateUI(messages) {
     const li = document.createElement('li');
     li.className = 'recording-item';
     li.innerHTML = `
-      <span class="timestamp">
-        ${new Date(message.timestamp).toLocaleString()} | 
-        Location: ${message.location}
-      </span>
-      <audio controls crossorigin="anonymous" src="${message.audioUrl}"></audio>
-      <button class="delete-btn" data-id="${message.id}">×</button>
+      <div class="recording-header">
+        <span class="timestamp">
+          ${new Date(message.timestamp).toLocaleString()} | 
+          Location: ${message.location}
+        </span>
+        <button class="summary-btn" data-id="${message.id}">Summary</button>
+        <button class="delete-btn" data-id="${message.id}">×</button>
+      </div>
+      <div class="audio-container">
+        <audio controls crossorigin="anonymous" src="${message.audioUrl}"></audio>
+      </div>
+      <div class="summary-panel" data-id="${message.id}"></div>
     `;
     recordingsList.appendChild(li);
   });
 }
+
+import { OpenAIService } from './openai-service.js';
+
+// Initialize OpenAI Service
+const openAIService = new OpenAIService();
+
+// Make it available globally for debugging
+window.openAIService = openAIService;
+
+// Summary button click handler
+document.addEventListener('click', async (e) => {
+  if (e.target.classList.contains('summary-btn')) {
+    const button = e.target;
+    const messageId = button.dataset.id;
+    const summaryPanel = document.querySelector(`.summary-panel[data-id="${messageId}"]`);
+    const audioElement = button.closest('.recording-item').querySelector('audio');
+    
+    // Toggle the summary panel
+    if (summaryPanel.style.display === 'block') {
+      summaryPanel.style.display = 'none';
+      return;
+    }
+    
+    // Show loading state
+    summaryPanel.style.display = 'block';
+    summaryPanel.innerHTML = '<div class="loading">Generating summary...</div>';
+    button.disabled = true;
+    
+    try {
+      // Get the audio file
+      const audioUrl = audioElement.src;
+      const response = await fetch(audioUrl);
+      const audioBlob = await response.blob();
+      
+      // Transcribe the audio
+      const transcription = await window.openAIService.transcribeAudio(audioBlob);
+      
+      // Generate summary
+      const summary = await window.openAIService.generateSummary(transcription);
+      
+      // Display the summary
+      summaryPanel.textContent = summary;
+      
+      // Store the summary in local storage for future use
+      localStorage.setItem(`summary_${messageId}`, summary);
+      
+    } catch (error) {
+      console.error('Error generating summary:', error);
+      summaryPanel.textContent = 'Error generating summary. Please try again.';
+    } finally {
+      button.disabled = false;
+    }
+  }
+});
+
+// Load saved summaries when the page loads
+document.addEventListener('DOMContentLoaded', () => {
+  const summaryPanels = document.querySelectorAll('.summary-panel');
+  summaryPanels.forEach(panel => {
+    const messageId = panel.dataset.id;
+    const savedSummary = localStorage.getItem(`summary_${messageId}`);
+    if (savedSummary) {
+      panel.textContent = savedSummary;
+    }
+  });
+});
 
 // Delete functionality
 document.addEventListener('click', (e) => {
@@ -422,7 +494,7 @@ document.addEventListener('click', (e) => {
       .then(() => {
         console.log('Message deleted');
       })
-      .catch((error) => {
+      .catch(error => {
         console.error('Error deleting message:', error);
       });
   }
