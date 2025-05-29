@@ -8,10 +8,15 @@ document.addEventListener('DOMContentLoaded', function() {
   const signUpForm = document.getElementById('signUpForm');
   const errorMessage = document.getElementById('errorMessage');
   const signUpErrorMessage = document.getElementById('signUpErrorMessage');
+  const googleSignInBtn = document.getElementById('googleSignIn');
 
   // Get the auth instance
   const auth = firebase.auth();
   
+  // Initialize Google provider
+  const googleProvider = new firebase.auth.GoogleAuthProvider();
+  googleProvider.setCustomParameters({ prompt: 'select_account' });
+
   // Show sign up form
   if (showSignUp) {
     showSignUp.addEventListener('click', function(e) {
@@ -39,18 +44,16 @@ document.addEventListener('DOMContentLoaded', function() {
       const password = document.getElementById('password').value;
       
       if (!email || !password) {
-        errorMessage.textContent = 'Please fill in all fields';
+        showError(errorMessage, 'Please fill in all fields');
         return;
       }
       
       try {
-        const userCredential = await auth.signInWithEmailAndPassword(email, password);
-        console.log('User signed in:', userCredential.user);
-        // Redirect on successful login
-        window.location.href = 'index.html';
+        await auth.signInWithEmailAndPassword(email, password);
+        // Redirect happens in onAuthStateChanged
       } catch (error) {
         console.error('Sign in error:', error);
-        errorMessage.textContent = error.message;
+        showError(errorMessage, error.message);
       }
     });
   }
@@ -62,33 +65,52 @@ document.addEventListener('DOMContentLoaded', function() {
       const password = document.getElementById('signUpPassword').value;
       
       if (!email || !password) {
-        signUpErrorMessage.textContent = 'Please fill in all fields';
+        showError(signUpErrorMessage, 'Please fill in all fields');
         return;
       }
       
       try {
-        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-        console.log('User created:', userCredential.user);
-        // Redirect on successful sign up
-        window.location.href = 'index.html';
+        await auth.createUserWithEmailAndPassword(email, password);
+        // Redirect happens in onAuthStateChanged
       } catch (error) {
         console.error('Sign up error:', error);
-        signUpErrorMessage.textContent = error.message;
+        showError(signUpErrorMessage, error.message);
       }
     });
+  }
+
+  // Google Sign In
+  if (googleSignInBtn) {
+    googleSignInBtn.addEventListener('click', async () => {
+      try {
+        await auth.signInWithPopup(googleProvider);
+        // Redirect happens in onAuthStateChanged
+      } catch (error) {
+        console.error('Google sign in error:', error);
+        showError(errorMessage, error.message);
+      }
+    });
+  }
+
+  // Helper function to show error messages
+  function showError(element, message) {
+    if (element) {
+      element.textContent = message;
+      setTimeout(() => { element.textContent = ''; }, 5000);
+    }
   }
 
   // Check auth state
   auth.onAuthStateChanged(user => {
     if (user) {
       console.log('User is signed in:', user);
-      // If user is already signed in, redirect to index.html
+      // If user is on login/signup page, redirect to index
       if (window.location.pathname.endsWith('login.html')) {
         window.location.href = 'index.html';
       }
     } else {
       console.log('No user is signed in');
-      // If user is not signed in, redirect to login.html
+      // If user is not on login page, redirect to login
       if (!window.location.pathname.endsWith('login.html')) {
         window.location.href = 'login.html';
       }
