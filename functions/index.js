@@ -1,7 +1,8 @@
-
 /**
  * Import function triggers from their respective submodules:
  */
+
+import {transcribeAudio, generateSummary} from './openai-index.js';
 
 import {onObjectFinalized} from 'firebase-functions/v2/storage';
 import {setGlobalOptions} from 'firebase-functions/v2';
@@ -16,9 +17,19 @@ setGlobalOptions({
   timeoutSeconds: 540,
   memory: '2GiB',
   region: 'europe-west1',
+  cors: [
+    'http://127.0.0.1:5501',
+    'https://pappg13.github.io',
+    'http://localhost:5000',
+    'http://localhost:5501',
+    'http://localhost:3000',
+    'http://localhost:8080',
+  ],
 });
 
-admin.initializeApp();
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
 
 // Initialize ffmpeg
 let ffmpeg;
@@ -134,5 +145,5 @@ const convertWebmToMp3 = onObjectFinalized(
       }
     });
 
-// Export the function to be triggered by Firebase Storage
-export {convertWebmToMp3};
+// Export all functions to be triggered by Firebase
+export {convertWebmToMp3, transcribeAudio, generateSummary};

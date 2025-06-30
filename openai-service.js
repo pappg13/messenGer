@@ -1,57 +1,49 @@
-import { functions, httpsCallable } from './firebase.js';
-
-export class OpenAIService {
+// openai-service.js
+class OpenAIService {
   constructor() {
-    // No API key needed in the frontend anymore
+    if (!window.firebaseApp) {
+      throw new Error('Firebase not initialized. Make sure firebase.js is loaded first.');
+    }
+    // Initialize functions with the correct region
+    this.functions = firebase.app().functions('europe-west1');
+    
+    this.transcribeAudioCallable = this.functions.httpsCallable('transcribeAudio');
+    this.generateSummaryCallable = this.functions.httpsCallable('generateSummary');
   }
 
-  // Transcribe audio using Firebase Function
   async transcribeAudio(audioBlob) {
     try {
-      // Convert blob to base64 for transmission
-      const base64data = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result.split(',')[1]);
-        reader.readAsDataURL(audioBlob);
-      });
-
-      const transcribeAudio = httpsCallable(functions, 'transcribeAudio');
-      const result = await transcribeAudio({ audioData: base64data });
-      return result.data.transcription;
+      const base64Audio = await this._blobToBase64(audioBlob);
+      const result = await this.transcribeAudioCallable({ audioData: base64Audio });
+      return result.data;
     } catch (error) {
       console.error('Error in transcribeAudio:', error);
-      throw new Error('Failed to transcribe audio. Please try again.');
+      throw error;
     }
   }
+  
+  _blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result.split(',')[1];
+        resolve(base64String);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
 
-  // Generate summary using Firebase Function
   async generateSummary(text) {
     try {
-      if (!text || text.trim().length === 0) {
-        throw new Error('No text provided for summarization');
-      }
-
-      const generateSummary = httpsCallable(functions, 'generateSummary');
-      const result = await generateSummary({ 
-        text,
-        // Include any prompt configuration here if needed
-        prompt: `You are a helpful assistant that summarizes voice messages concisely. 
-              
-Format your response as follows:
-1. Start with a brief 1-2 sentence summary
-2. Add a blank line
-3. List the main points, each on a new line with a bullet point
-
-Keep the summary clear and to the point.`
-      });
-      
-      return result.data.summary;
+      const result = await this.generateSummaryCallable({ text });
+      return result.data.summary; // Return the summary property directly
     } catch (error) {
       console.error('Error in generateSummary:', error);
-      throw new Error('Failed to generate summary. Please try again.');
+      throw error;
     }
   }
 }
 
-// Create and export a singleton instance
+// Export as a singleton
 export const openAIService = new OpenAIService();

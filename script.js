@@ -76,7 +76,7 @@ async function saveMessage(blob, location) {
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         try {
           const url = await mp3Ref.getDownloadURL();
-          return url; // 🎯 MP3 is ready
+          return url; // MP3 is ready
         } catch (err) {
           console.log(`MP3 not ready (attempt ${attempt + 1}), retrying...`);
           await new Promise(res => setTimeout(res, delayMs));
@@ -420,10 +420,7 @@ function updateUI(messages) {
   });
 }
 
-import { OpenAIService } from './openai-service.js';
-
-// Initialize OpenAI Service
-const openAIService = new OpenAIService();
+import { openAIService } from './openai-service.js';
 
 // Make it available globally for debugging
 window.openAIService = openAIService;
@@ -454,10 +451,11 @@ document.addEventListener('click', async (e) => {
       const audioBlob = await response.blob();
       
       // Transcribe the audio
-      const transcription = await window.openAIService.transcribeAudio(audioBlob);
+      const transcriptionResult = await window.openAIService.transcribeAudio(audioBlob);
+      const transcriptionText = transcriptionResult.transcription;
       
       // Generate summary
-      const summary = await window.openAIService.generateSummary(transcription);
+      const summary = await window.openAIService.generateSummary(transcriptionText);
       
       // Display the summary
       summaryPanel.textContent = summary;

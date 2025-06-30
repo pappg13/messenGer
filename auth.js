@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Get the auth instance
   const auth = firebase.auth();
-  
+
   // Initialize Google provider
   const googleProvider = new firebase.auth.GoogleAuthProvider();
   googleProvider.setCustomParameters({ prompt: 'select_account' });

@@ -4,6 +4,7 @@
   "lockfileVersion": 3,
   "requires": true,
   "packages": {},
+  "type": "module",
   "scripts": {
     "start": "live-server",
     "build": "mkdir -p docs && cp index.html manifest.json script.js docs/",
@@ -11,6 +12,7 @@
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "dotenv": "^16.5.0",
     "firebase": "^9.15.0",
     "firebase-functions": "^6.3.2",
     "fluent-ffmpeg": "^2.1.3",
