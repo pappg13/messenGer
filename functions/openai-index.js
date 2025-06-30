@@ -67,10 +67,11 @@ export const generateSummary = onCall({region: 'europe-west1'}, async (request) 
           role: 'system',
           content: `You are a helpful assistant that summarizes voice messages concisely. 
                     Format your response as follows:
-                    1. Start with a brief 1-2 sentence summary
-                    2. Add a blank line
-                    3. List the main points, each on a new line with a bullet point
-                    Keep the summary clear and to the point.`,
+                    1. Start with a brief 1-2 sentence summary.
+                    2. The summary should be in the same language as the voice message was.
+                    3. Add a blank line
+                    4. List the main themes in 2-3 words, each on a new line with a bullet point.
+                    5. Keep the summary clear and to the point.`,
         },
         {
           role: 'user',
