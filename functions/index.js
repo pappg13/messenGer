@@ -1,149 +1,120 @@
-/**
- * Import function triggers from their respective submodules:
- */
-
-import {transcribeAudio, generateSummary} from './openai-index.js';
-
 import {onObjectFinalized} from 'firebase-functions/v2/storage';
 import {setGlobalOptions} from 'firebase-functions/v2';
 import admin from 'firebase-admin';
 import path from 'path';
 import os from 'os';
 import {promises as fs} from 'fs';
+import {transcribeBuffer, summarizeText} from './openai-index.js';
 
-// Set the maximum instances and timeout for the function
 setGlobalOptions({
   maxInstances: 10,
   timeoutSeconds: 540,
   memory: '2GiB',
   region: 'europe-west1',
-  cors: [
-    'http://127.0.0.1:5501',
-    'https://pappg13.github.io',
-    'http://localhost:5000',
-    'http://localhost:5501',
-    'http://localhost:3000',
-    'http://localhost:8080',
-  ],
 });
 
 if (admin.apps.length === 0) {
-  admin.initializeApp();
+  admin.initializeApp({
+    databaseURL: 'https://messen-g-er2-default-rtdb.europe-west1.firebasedatabase.app/',
+  });
 }
 
-// Initialize ffmpeg
-let ffmpeg;
-let ffmpegInitialized = false;
+// Input formats the browsers produce: Chrome/Firefox webm, Safari/iOS mp4.
+const SUPPORTED_TYPES = /^(audio\/(webm|mp4|x-m4a|m4a|aac)|video\/(webm|mp4))/;
 
+let ffmpeg;
+
+/**
+ * Loads fluent-ffmpeg on first use.
+ */
 async function initializeFfmpeg() {
-  if (ffmpegInitialized) return;
+  if (ffmpeg) return;
   const ffmpegModule = await import('fluent-ffmpeg');
   const ffmpegPath = (await import('@ffmpeg-installer/ffmpeg')).default.path;
   ffmpeg = ffmpegModule.default;
   ffmpeg.setFfmpegPath(ffmpegPath);
-  ffmpegInitialized = true;
 }
 
-const convertWebmToMp3 = onObjectFinalized(
-    {
-      region: 'europe-west1',
-      timeoutSeconds: 540,
-      memory: '2GiB',
-    },
+/**
+ * Converts any supported recording to mp3.
+ * @param {string} input source file
+ * @param {string} output target file
+ * @return {Promise<void>}
+ */
+function convertToMp3(input, output) {
+  return new Promise((resolve, reject) => {
+    ffmpeg(input)
+        .noVideo()
+        .audioCodec('libmp3lame')
+        .audioBitrate('128k')
+        .output(output)
+        .on('end', resolve)
+        .on('error', reject)
+        .run();
+  });
+}
+
+/**
+ * Converts a new recording to mp3, then transcribes and summarises it once,
+ * writing progress onto messages/<messageId> for the client to render.
+ */
+export const processRecording = onObjectFinalized(
+    {region: 'europe-west1', timeoutSeconds: 540, memory: '2GiB'},
     async (event) => {
-      await initializeFfmpeg();
       const object = event.data;
-      if (!object || !object.bucket || !object.name) {
-        console.error('Invalid object provided');
+      const filePath = object?.name || '';
+      const contentType = object?.contentType || '';
+      const messageId = object?.metadata?.messageId;
+
+      if (!filePath.startsWith('recordings/') || filePath.endsWith('.mp3') ||
+          !SUPPORTED_TYPES.test(contentType) || !messageId) {
         return null;
       }
 
-      const fileBucket = object.bucket;
-      const filePath = object.name;
-      const contentType = object.contentType || '';
-      const metadata = object.metadata || {};
+      const msgRef = admin.database().ref(`messages/${messageId}`);
+      // Patch the record only while it still exists, so a message deleted
+      // mid-processing is not resurrected by a late status write.
+      const patch = (fields) => msgRef.transaction(
+          (cur) => (cur ? {...cur, ...fields} : cur));
+      const existing = (await msgRef.once('value')).val();
+      if (!existing) return null; // deleted before processing
+      if (existing.status === 'ready') return null; // retry of finished work
 
-      // Exit if this is not a WebM file
-      if (!contentType.startsWith('audio/webm')) {
-        console.log('Not a WebM file, skipping conversion');
-        return null;
-      }
-
-      // Exit if this is already an MP3 file (in case of retries)
-      if (filePath.endsWith('.mp3')) {
-        console.log('Already an MP3 file, skipping');
-        return null;
-      }
-
-      // Get the file name
-      const fileName = path.basename(filePath);
-      const baseName = path.basename(fileName, path.extname(fileName));
-      const tempFilePath = path.join(os.tmpdir(), fileName);
-      const targetTempFilePath = path.join(os.tmpdir(), `${baseName}.mp3`);
-      const bucket = admin.storage().bucket(fileBucket);
+      await initializeFfmpeg();
+      const bucket = admin.storage().bucket(object.bucket);
+      const sourceName = path.basename(filePath);
+      const tempSource = path.join(os.tmpdir(), sourceName);
+      const tempMp3 = path.join(os.tmpdir(), `${messageId}.mp3`);
+      const mp3Path = `recordings/${messageId}.mp3`;
 
       try {
-        // Download the WebM file to a temporary location
-        await bucket.file(filePath).download({destination: tempFilePath});
-        console.log('WebM file downloaded to', tempFilePath);
-
-        // Convert to MP3
-        await new Promise((resolve, reject) => {
-          ffmpeg(tempFilePath)
-              .output(targetTempFilePath)
-              .audioCodec('libmp3lame')
-              .audioBitrate('192k')
-              .on('end', () => {
-                console.log('Conversion to MP3 completed');
-                resolve();
-              })
-              .on('error', (err) => {
-                console.error('Error converting to MP3:', err);
-                reject(err);
-              })
-              .run();
-        });
-
-        // Upload the MP3 file
-        const destination = filePath.replace(/\.webm$/, '.mp3');
-        await bucket.upload(targetTempFilePath, {
-          destination: destination,
+        await patch({status: 'converting'});
+        await bucket.file(filePath).download({destination: tempSource});
+        await convertToMp3(tempSource, tempMp3);
+        await bucket.upload(tempMp3, {
+          destination: mp3Path,
           metadata: {
-            metadata: {
-              ...metadata,
-              originalFile: fileName,
-              converted: true,
-            },
             contentType: 'audio/mpeg',
+            metadata: {messageId, originalFile: sourceName},
           },
         });
-        console.log('MP3 file uploaded to', destination);
-
-        // Delete the original WebM file
         await bucket.file(filePath).delete();
-        console.log('Original WebM file deleted');
 
-        // Clean up temporary files
-        await Promise.all([
-          fs.unlink(tempFilePath).catch(console.error),
-          fs.unlink(targetTempFilePath).catch(console.error),
-        ]);
-
-        return null;
+        await patch({audioPath: mp3Path, status: 'transcribing'});
+        const transcript = await transcribeBuffer(
+            await fs.readFile(tempMp3), `${messageId}.mp3`);
+        const summary = transcript.trim() ? await summarizeText(transcript) : '';
+        await patch({transcript, summary, status: 'ready'});
       } catch (error) {
-        console.error('Error during conversion:', error);
-        // Clean up temporary files in case of error
-        try {
-          await Promise.all([
-            fs.unlink(tempFilePath).catch(console.error),
-            fs.unlink(targetTempFilePath).catch(console.error),
-          ]);
-        } catch (cleanupError) {
-          console.error('Error cleaning up temporary files:', cleanupError);
-        }
+        console.error('processRecording failed for', messageId, error);
+        await patch({status: 'error', error: 'Processing failed'})
+            .catch(() => {});
         throw error;
+      } finally {
+        await Promise.all([
+          fs.unlink(tempSource).catch(() => {}),
+          fs.unlink(tempMp3).catch(() => {}),
+        ]);
       }
+      return null;
     });
-
-// Export all functions to be triggered by Firebase
-export {convertWebmToMp3, transcribeAudio, generateSummary};

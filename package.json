@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "start": "live-server",
-    "build": "mkdir -p docs && cp index.html manifest.json script.js docs/",
+    "build": "mkdir -p docs && cp index.html login.html style.css script.js firebase.js auth.js manifest.json favicon.ico docs/",
     "deploy": "gh-pages -d docs"
   },
   "dependencies": {

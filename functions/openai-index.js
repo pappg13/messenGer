@@ -1,6 +1,5 @@
 import * as functions from 'firebase-functions';
-import {onCall, HttpsError} from 'firebase-functions/v2/https';
-import {OpenAI} from 'openai';
+import {OpenAI, toFile} from 'openai';
 import * as dotenv from 'dotenv';
 
 // Load environment variables from .env file in development
@@ -8,85 +7,62 @@ if (process.env.NODE_ENV !== 'production') {
   dotenv.config();
 }
 
-// Initialize OpenAI with proper error handling
 let openai;
-try {
-  const apiKey = process.env.OPENAI_API_KEY || functions.config().openai?.api_key;
-  if (!apiKey) {
-    throw new Error('OpenAI API key not found.');
+
+/**
+ * Lazily creates the OpenAI client so a missing key only fails the
+ * recordings that need it, not the whole function bundle.
+ * @return {OpenAI} client
+ */
+function getClient() {
+  if (!openai) {
+    const apiKey = process.env.OPENAI_API_KEY || functions.config().openai?.api_key;
+    if (!apiKey) {
+      throw new Error('OpenAI API key not found.');
+    }
+    openai = new OpenAI({apiKey});
   }
-  openai = new OpenAI({apiKey});
-} catch (error) {
-  console.error('Failed to initialize OpenAI:', error);
-  throw error;
+  return openai;
 }
 
-// Transcribe Audio Function
-export const transcribeAudio = onCall({region: 'europe-west1'}, async (request) => {
-  try {
-    const {audioData} = request.data;
+/**
+ * Transcribes an audio buffer with Whisper.
+ * @param {Buffer} buffer audio bytes
+ * @param {string} filename name with a correct extension (e.g. x.mp3)
+ * @return {Promise<string>} transcript text
+ */
+export async function transcribeBuffer(buffer, filename) {
+  const file = await toFile(buffer, filename);
+  const transcription = await getClient().audio.transcriptions.create({
+    file,
+    model: 'whisper-1',
+  });
+  return transcription.text;
+}
 
-    if (!audioData) {
-      throw new HttpsError('invalid-argument', 'No audio data provided');
-    }
-
-    const audioBuffer = Buffer.from(audioData, 'base64');
-
-    // Create a File object from the buffer, which is the expected format.
-    const audioFile = new File([audioBuffer], 'recording.mp3', {
-      type: 'audio/mpeg',
-    });
-
-    const transcription = await openai.audio.transcriptions.create({
-      file: audioFile,
-      model: 'whisper-1',
-    });
-
-    return {
-      transcription: transcription.text,
-    };
-  } catch (error) {
-    console.error('Error in transcribeAudio:', error);
-    throw new HttpsError('internal', 'Failed to transcribe audio', error.message);
-  }
-});
-
-// Generate Summary Function
-export const generateSummary = onCall({region: 'europe-west1'}, async (request) => {
-  try {
-    const {text} = request.data;
-
-    if (!text) {
-      throw new HttpsError('invalid-argument', 'No text provided for summarization');
-    }
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        {
-          role: 'system',
-          content: `You are a helpful assistant that summarizes voice messages concisely. 
-                    Format your response as follows:
-                    1. Start with a brief 1-2 sentence summary.
-                    2. The summary should be in the same language as the voice message was.
-                    3. Add a blank line
-                    4. List the main themes in 2-3 words, each on a new line with a bullet point.
-                    5. Keep the summary clear and to the point.`,
-        },
-        {
-          role: 'user',
-          content: `Please summarize the following text:\n\n${text}`,
-        },
-      ],
-      temperature: 0.5,
-      max_tokens: 300,
-    });
-
-    return {
-      summary: completion.choices[0]?.message?.content?.trim() || 'No summary available',
-    };
-  } catch (error) {
-    console.error('Error in generateSummary:', error);
-    throw new HttpsError('internal', 'Failed to generate summary', error.message);
-  }
-});
+/**
+ * Summarises a transcript in the language it was spoken in.
+ * @param {string} text transcript
+ * @return {Promise<string>} short summary
+ */
+export async function summarizeText(text) {
+  const completion = await getClient().chat.completions.create({
+    model: 'gpt-3.5-turbo',
+    messages: [
+      {
+        role: 'system',
+        content: `You are a helpful assistant that summarizes voice messages concisely.
+                  Write a brief summary of 1-2 sentences, as plain text with no
+                  bullet points or headings. The summary must be in the same
+                  language as the voice message.`,
+      },
+      {
+        role: 'user',
+        content: `Please summarize the following text:\n\n${text}`,
+      },
+    ],
+    temperature: 0.5,
+    max_tokens: 200,
+  });
+  return completion.choices[0]?.message?.content?.trim() || '';
+}

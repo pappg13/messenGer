@@ -21,8 +21,8 @@ document.addEventListener('DOMContentLoaded', function() {
   if (showSignUp) {
     showSignUp.addEventListener('click', function(e) {
       e.preventDefault();
-      loginForm.style.display = 'none';
-      signUpForm.style.display = 'block';
+      loginForm.hidden = true;
+      signUpForm.hidden = false;
       errorMessage.textContent = '';
     });
   }
@@ -31,8 +31,8 @@ document.addEventListener('DOMContentLoaded', function() {
   if (showLogin) {
     showLogin.addEventListener('click', function(e) {
       e.preventDefault();
-      signUpForm.style.display = 'none';
-      loginForm.style.display = 'block';
+      signUpForm.hidden = true;
+      loginForm.hidden = false;
       signUpErrorMessage.textContent = '';
     });
   }
@@ -52,8 +52,7 @@ document.addEventListener('DOMContentLoaded', function() {
         await auth.signInWithEmailAndPassword(email, password);
         // Redirect happens in onAuthStateChanged
       } catch (error) {
-        console.error('Sign in error:', error);
-        showError(errorMessage, error.message);
+          showError(errorMessage, error.message);
       }
     });
   }
@@ -73,7 +72,6 @@ document.addEventListener('DOMContentLoaded', function() {
         await auth.createUserWithEmailAndPassword(email, password);
         // Redirect happens in onAuthStateChanged
       } catch (error) {
-        console.error('Sign up error:', error);
         showError(signUpErrorMessage, error.message);
       }
     });
@@ -86,7 +84,6 @@ document.addEventListener('DOMContentLoaded', function() {
         await auth.signInWithPopup(googleProvider);
         // Redirect happens in onAuthStateChanged
       } catch (error) {
-        console.error('Google sign in error:', error);
         showError(errorMessage, error.message);
       }
     });
@@ -103,13 +100,11 @@ document.addEventListener('DOMContentLoaded', function() {
   // Check auth state
   auth.onAuthStateChanged(user => {
     if (user) {
-      console.log('User is signed in:', user);
       // If user is on login/signup page, redirect to index
       if (window.location.pathname.endsWith('login.html')) {
         window.location.href = 'index.html';
       }
     } else {
-      console.log('No user is signed in');
       // If user is not on login page, redirect to login
       if (!window.location.pathname.endsWith('login.html')) {
         window.location.href = 'login.html';
