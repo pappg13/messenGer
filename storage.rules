@@ -1,12 +1,14 @@
 rules_version = '2';
 
-// Craft rules based on data in your Firestore database
-// allow write: if firestore.get(
-//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
+// Only signed-in users can touch recordings. The Cloud Function uses the Admin
+// SDK, which bypasses these rules. Playback URLs carry their own download token.
 service firebase.storage {
   match /b/{bucket}/o {
-    match /{allPaths=**} {
-      allow read, write: if true;
+    match /recordings/{file} {
+      allow read, delete: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.size < 25 * 1024 * 1024
+                    && request.resource.contentType.matches('(audio|video)/.*');
     }
   }
 }
