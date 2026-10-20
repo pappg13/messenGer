@@ -1,4 +1,3 @@
-import * as functions from 'firebase-functions';
 import {OpenAI, toFile} from 'openai';
 import * as dotenv from 'dotenv';
 
@@ -16,7 +15,7 @@ let openai;
  */
 function getClient() {
   if (!openai) {
-    const apiKey = process.env.OPENAI_API_KEY || functions.config().openai?.api_key;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       throw new Error('OpenAI API key not found.');
     }

@@ -1,12 +1,14 @@
 rules_version = '2';
 
-// Only signed-in users can touch recordings. The Cloud Function uses the Admin
-// SDK, which bypasses these rules. Playback URLs carry their own download token.
+// Clients can only drop a new recording into their own uploads folder. They can
+// never read or delete anything: the Cloud Function (Admin SDK, which bypasses
+// these rules) verifies Journal membership, converts the file, stores it under
+// recordings/<journalId>/ and hands members short-lived signed URLs.
 service firebase.storage {
   match /b/{bucket}/o {
-    match /recordings/{file} {
-      allow read, delete: if request.auth != null;
+    match /uploads/{uid}/{jid}/{file} {
       allow create: if request.auth != null
+                    && request.auth.uid == uid
                     && request.resource.size < 25 * 1024 * 1024
                     && request.resource.contentType.matches('(audio|video)/.*');
     }

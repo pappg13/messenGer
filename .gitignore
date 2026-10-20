@@ -3,4 +3,4 @@ node_modules/
 functions/.env
 .env
 *.env
-config.js
+config.js*-debug.log

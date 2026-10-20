@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "lint": "eslint .",
+    "test": "node --test \"test/*.test.js\"",
+    "migrate": "node scripts/migrate.js",
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",
     "start": "npm run shell",
@@ -26,6 +28,7 @@
     "openai": "^4.103.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4",
     "@types/cors": "^2.8.18",
     "eslint": "^8.15.0",
     "eslint-config-google": "^0.14.0",

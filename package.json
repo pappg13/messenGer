@@ -7,8 +7,10 @@
   "type": "module",
   "scripts": {
     "start": "live-server",
-    "build": "mkdir -p docs && cp index.html login.html style.css script.js firebase.js auth.js manifest.json favicon.ico docs/",
-    "deploy": "gh-pages -d docs"
+    "build": "rm -rf docs && mkdir -p docs && cp -R index.html login.html style.css firebase.js auth.js manifest.json favicon.ico js lib docs/",
+    "deploy": "gh-pages -d docs",
+    "emulators": "firebase emulators:start --only auth,database,storage,functions",
+    "test": "firebase emulators:exec --only auth,database,storage --project messen-g-er2 \"npm --prefix functions test\""
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
@@ -23,7 +25,7 @@
     "gh-pages": "^6.3.0"
   },
   "description": "voice messaging app",
-  "main": "script.js",
+  "main": "js/app.js",
   "directories": {
     "doc": "docs"
   },

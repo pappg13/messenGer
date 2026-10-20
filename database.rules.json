@@ -1,9 +1,82 @@
 {
   "rules": {
-    "messages": {
-      ".read": "auth != null",
-      "$id": {
-        ".write": "auth != null && (data.exists() || newData.child('uid').val() === auth.uid)"
+    "userJournals": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid"
+      }
+    },
+    "journals": {
+      "$jid": {
+        ".read": "auth != null && root.child('journals').child($jid).child('members').child(auth.uid).exists()",
+
+        "meta": {
+          "name": {
+            ".write": "auth != null && root.child('journals').child($jid).child('members').child(auth.uid).exists() && newData.exists()",
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
+          },
+          "color": {
+            ".write": "auth != null && root.child('journals').child($jid).child('members').child(auth.uid).exists() && newData.exists()",
+            ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}$/)"
+          }
+        },
+
+        "members": {
+          "$uid": {
+            "lastSeenAt": {
+              ".write": "auth != null && auth.uid === $uid && root.child('journals').child($jid).child('members').child($uid).exists() && newData.exists()",
+              ".validate": "newData.isNumber() && newData.val() <= now"
+            },
+            "displayName": {
+              ".write": "auth != null && auth.uid === $uid && root.child('journals').child($jid).child('members').child($uid).exists() && newData.exists()",
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
+            }
+          }
+        },
+
+        "messages": {
+          ".indexOn": ["createdAt"],
+          "$mid": {
+            ".write": "auth != null && root.child('journals').child($jid).child('members').child(auth.uid).exists() && !data.exists() && newData.child('authorId').val() === auth.uid && newData.child('status').val() === 'uploading' && !newData.child('deletedAt').exists()",
+            ".validate": "newData.hasChildren(['authorId', 'authorName', 'createdAt', 'duration', 'mimeType', 'status'])",
+            "authorId": { ".validate": "newData.isString()" },
+            "authorName": { ".validate": "newData.isString() && newData.val().length <= 60" },
+            "createdAt": { ".validate": "newData.val() === now" },
+            "duration": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 7200" },
+            "mimeType": { ".validate": "newData.isString() && newData.val().matches(/^(audio|video)\\/[a-zA-Z0-9.+;=_ -]+$/) && newData.val().length <= 80" },
+            "location": { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "peaks": {
+              ".validate": "newData.hasChildren()",
+              "$i": { ".validate": "$i.matches(/^([0-9]|[1-5][0-9]|6[0-3])$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 1" }
+            },
+            "status": {
+              ".write": "auth != null && root.child('journals').child($jid).child('members').child(auth.uid).exists() && data.val() === 'uploading' && newData.val() === 'error' && data.parent().child('authorId').val() === auth.uid",
+              ".validate": "newData.val() === 'uploading' || newData.val() === 'error'"
+            },
+            "deletedAt": {
+              ".write": "auth != null && root.child('journals').child($jid).child('members').child(auth.uid).exists() && data.parent().child('authorId').val() === auth.uid && !data.exists() && newData.isNumber()",
+              ".validate": "newData.val() === now"
+            },
+            "$other": { ".validate": false }
+          }
+        },
+
+        "listens": {
+          "$mid": {
+            "$uid": {
+              ".write": "auth != null && auth.uid === $uid && root.child('journals').child($jid).child('members').child(auth.uid).exists() && !data.exists() && newData.exists() && root.child('journals').child($jid).child('messages').child($mid).child('authorId').val() !== null && root.child('journals').child($jid).child('messages').child($mid).child('authorId').val() !== auth.uid",
+              ".validate": "newData.val() === now"
+            }
+          }
+        },
+
+        "reactions": {
+          "$mid": {
+            "$uid": {
+              ".write": "auth != null && auth.uid === $uid && root.child('journals').child($jid).child('members').child(auth.uid).exists() && root.child('journals').child($jid).child('messages').child($mid).child('authorId').val() !== null",
+              ".validate": "newData.isString() && (newData.val() === '❤️' || newData.val() === '😂' || newData.val() === '👍' || newData.val() === '😮' || newData.val() === '😢' || newData.val() === '🙏')"
+            }
+          }
+        }
       }
     }
   }
