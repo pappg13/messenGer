@@ -1,0 +1,10 @@
+{
+  "rules": {
+    "messages": {
+      ".read": "auth != null",
+      "$id": {
+        ".write": "auth != null && (data.exists() || newData.child('uid').val() === auth.uid)"
+      }
+    }
+  }
+}

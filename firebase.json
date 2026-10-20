@@ -1,4 +1,7 @@
 {
+  "database": {
+    "rules": "database.rules.json"
+  },
   "storage": {
     "rules": "storage.rules"
   },
@@ -7,13 +10,17 @@
       "npm --prefix \"$RESOURCE_DIR\" run lint"
     ],
     "source": "functions",
-    "headers": [{
-      "source": "**",
-      "headers": [{
-        "key": "Access-Control-Allow-Origin",
-        "value": "*"
-      }]
-    }],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          }
+        ]
+      }
+    ],
     "ignore": [
       "node_modules",
       ".git",
