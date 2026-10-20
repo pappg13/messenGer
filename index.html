@@ -19,48 +19,28 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-functions-compat.js"></script>
 </head>
 <body>
-  <div class="app">
-    <div class="top">
-      <header class="header">
-        <h1 class="wordmark">messenGer</h1>
-        <div class="members" id="members" aria-label="Group members"></div>
-        <button class="icon-btn" id="settingsBtn" aria-label="Settings" aria-haspopup="true">
-          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
-        </button>
-      </header>
-
-      <div class="recorder" id="recorder">
-        <button class="record-btn" id="recordBtn">
-          <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
-          Record
-        </button>
-        <div class="rec-active" id="recActive" hidden>
-          <span class="rec-dot"></span>
-          <span class="rec-time" id="recTime">0:00</span>
-          <canvas class="rec-wave" id="recWave"></canvas>
-          <button class="icon-btn" id="cancelBtn" aria-label="Cancel recording">
-            <svg class="icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
-          </button>
-          <button class="icon-btn send-btn" id="sendBtn" aria-label="Send recording">
-            <svg class="icon" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <main id="feed" aria-live="polite"></main>
-
-    <div class="empty" id="empty" hidden>
-      <h2>Record your first message</h2>
-      <p>Tap Record above, say what's on your mind, and send it to the family.</p>
-    </div>
+  <div class="app" id="app" hidden>
+    <div id="view"></div>
   </div>
+
+  <nav class="tabbar" aria-label="Main">
+    <a class="tab" data-tab="home" href="#/">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/></svg>
+      <span>Home</span>
+    </a>
+    <a class="tab" data-tab="account" href="#/account">
+      <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
+      <span>Account</span>
+    </a>
+  </nav>
 
   <div class="toast" id="toast" role="status" hidden></div>
 
   <script src="firebase.js"></script>
-  <script src="script.js" type="module"></script>
+  <script src="lib/qrcode.js"></script>
+  <script src="js/app.js" type="module"></script>
 </body>
 </html>
